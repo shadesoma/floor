@@ -28,7 +28,7 @@ export const drawLineX = (img: JimpImage, color: number, lineNumber: number, pan
   }
 }
 
-async function getImagePixels(floorWidth: number, floorHeight: number): Promise<Buffer> {
+async function getImagePixelsToBytes(floorWidth: number, floorHeight: number): Promise<Buffer> {
 
   // У
   img.setPixelColor(redBit, 0, 1)
@@ -110,7 +110,7 @@ async function getImagePixels(floorWidth: number, floorHeight: number): Promise<
 
 const floorMiddleware = () => {
   (async () => {
-    const bPixels = await getImagePixels(panelWidthX, panelHeightY);
+    const bPixels = await getImagePixelsToBytes(panelWidthX, panelHeightY);
 
     const client = createSocket('udp4');
     client.bind(2317, '192.168.0.201');
