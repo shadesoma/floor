@@ -1,5 +1,8 @@
-import {createSocket} from 'dgram';
+import dgram from 'dgram';
 import {Jimp} from "jimp";
+import {Buffer} from 'node:buffer';
+
+const socket = dgram.createSocket('udp4');
 
 const jimp = require('jimp');
 
@@ -10,6 +13,9 @@ const blueBit = 0x0000ffff;
 const panelWidthX = 19;
 const panelHeightY = 13;
 
+const socketIp = '192.168.0.201';
+// const socketIp = '127.0.0.1';
+const socketPort = 2317;
 const UDP_IP = "192.168.0.7";
 const pannelsX = [6, 4, 4, 5];
 const ports = [24, 23, 22, 21];
@@ -28,7 +34,7 @@ export const drawLineX = (img: JimpImage, color: number, lineNumber: number, pan
   }
 }
 
-async function getImagePixelsToBytes(floorWidth: number, floorHeight: number): Promise<Buffer> {
+function getImagePixelsToBytes(floorWidth: number, floorHeight: number): Buffer {
 
   // У
   img.setPixelColor(redBit, 0, 1)
@@ -95,7 +101,7 @@ async function getImagePixelsToBytes(floorWidth: number, floorHeight: number): P
       // line.push(color)
 
       const {r, g, b} = jimp.intToRGBA(img.getPixelColor(x, y));
-      // записать цвет в масив нужно в этом порядке G B R
+      //записать цвет в масив нужно в этом порядке G B R
       line.push(Number(`${g}${b}${r}`))
     }
     pixels.push(Buffer.from(line))
@@ -108,25 +114,32 @@ async function getImagePixelsToBytes(floorWidth: number, floorHeight: number): P
   return Buffer.concat(pixels);
 }
 
+function sendBytes() {
+  const buf = Buffer.from(getImagePixelsToBytes(panelWidthX, panelHeightY));
+
+  const bPixels = Uint8Array.prototype.slice.call(buf);
+
+  let slice = 0;
+
+  for (let port = 0; port < 4; port++) {
+    const sliceNow = pannelsX[port] * pannelsY;
+    const buff = Buffer.concat([prefix, wtf, bPixels.slice(slice, slice + sliceNow)]);
+    console.log(bPixels.slice(slice, slice + sliceNow));
+    socket.send(buff, ports[port], UDP_IP, (err) => {
+      if (err) console.error(err);
+    });
+    slice += sliceNow;
+  }
+}
+
 const floorMiddleware = () => {
-  (async () => {
-    const bPixels = await getImagePixelsToBytes(panelWidthX, panelHeightY);
+  socket.on('error', (err) => {
+    console.error(`server error:\n${err.stack}`);
+    socket.close();
+  });
 
-    const client = createSocket('udp4');
-    client.bind(2317, '192.168.0.201');
 
-    let slice = 0;
-
-    for (let port = 0; port < 4; port++) {
-      const sliceNow = pannelsX[port] * pannelsY * 3;
-      const buff = Buffer.concat([prefix, wtf, bPixels.slice(slice, slice + sliceNow)]);
-      console.log(bPixels.slice(slice, slice + sliceNow));
-      client.send(buff, ports[port], UDP_IP, (err) => {
-        if (err) console.error(err);
-      });
-      slice += sliceNow;
-    }
-  })();
+  socket.bind({address: socketIp, port: socketPort}, () => sendBytes());
 }
 
 export default floorMiddleware;

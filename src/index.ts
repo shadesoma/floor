@@ -17,9 +17,11 @@ app.listen(port, () => {
   console.log(`[server]: Server is running at http://localhost:${port}`);
 });
 
-let calls = 0;
+// let calls = 0;
+//
+// while (calls < 1) {
+//   floorMiddleware()
+//   calls++
+// }
 
-while (calls <= 1) {
-  floorMiddleware()
-  calls++
-}
+floorMiddleware()
