@@ -34,7 +34,7 @@ export const drawLineX = (img: JimpImage, color: number, lineNumber: number, pan
   }
 }
 
-function getImagePixelsToBytes(floorWidth: number, floorHeight: number): Buffer {
+function getImagePixelsToBytes(floorWidth: number, floorHeight: number): Buffer[] {
 
   // У
   img.setPixelColor(redBit, 0, 1)
@@ -91,45 +91,87 @@ function getImagePixelsToBytes(floorWidth: number, floorHeight: number): Buffer 
   drawLineX(img, greenBit, 11, panelWidthX)
   drawLineX(img, blueBit, 12, panelWidthX)
 
-  const pixels: Buffer[] = [];
+  // const pixels: Buffer[] = [];
 
-  for (let y = 0; y < floorHeight; y++) {
-    const line: number[] = []
-    for (let x = 0; x < floorWidth; x++) {
-      // const color = img.getPixelColor(x, y);
-      // // записываем цвет в байтах
-      // line.push(color)
+  // for (let y = 0; y < floorHeight; y++) {
+  //   const line: number[] = []
+  //   for (let x = 0; x < floorWidth; x++) {
+  //     // const color = img.getPixelColor(x, y);
+  //     // // записываем цвет в байтах
+  //     // line.push(color)
+  //
+  //     const {r, g, b} = jimp.intToRGBA(img.getPixelColor(x, y));
+  //     //записать цвет в масив нужно в этом порядке G B R
+  //     line.push(Number(`${g}${b}${r}`))
+  //   }
+  //   pixels.push(Buffer.from(line))
+  // }
 
-      const {r, g, b} = jimp.intToRGBA(img.getPixelColor(x, y));
-      //записать цвет в масив нужно в этом порядке G B R
-      line.push(Number(`${g}${b}${r}`))
+  const bufferLines: Buffer[] = []
+
+  let currentX = 0
+
+  for (let segment = 0; segment < pannelsX.length; segment++) {
+    const segments: Buffer[] = []
+    let currentY = 0;
+    for (let x = currentX; x < pannelsX[segment] + currentX; x++) {
+      const line: number[] = []
+      for (let y = 0; y < floorHeight; y++) {
+        if (currentY < floorHeight) {
+          const {r, g, b} = jimp.intToRGBA(img.getPixelColor(currentX, currentY));
+          //записать цвет в масив нужно в этом порядке G B R
+          line.push(Number(`${g}${b}${r}`))
+
+          if (currentY !== floorHeight - 1) {
+            currentY++
+          } else {
+            currentY = (floorHeight - 1) * 2
+          }
+        } else {
+          const {r, g, b} = jimp.intToRGBA(img.getPixelColor(x, currentY - floorHeight));
+          //записать цвет в масив нужно в этом порядке G B R
+          line.push(Number(`${g}${b}${r}`))
+          if (currentY > floorHeight) {
+            currentY--
+          } else {
+            currentY = 0
+          }
+        }
+      }
+      segments.push(Buffer.from(line))
     }
-    pixels.push(Buffer.from(line))
-  }
+    currentX += pannelsX[segment]
 
-  console.log(pixels)
+    bufferLines.push(Buffer.concat(segments))
+  }
 
   // await img.write(`/home/soma/Загрузки/test.png`)
 
-  return Buffer.concat(pixels);
+  // console.log(bufferLines)
+
+  return bufferLines;
 }
 
 function sendBytes() {
-  const buf = Buffer.from(getImagePixelsToBytes(panelWidthX, panelHeightY));
-
-  const bPixels = Uint8Array.prototype.slice.call(buf);
+  const bufLinesForPorts = getImagePixelsToBytes(panelWidthX, panelHeightY);
 
   let slice = 0;
 
+  // console.log(bufLinesForPorts)
+
   for (let port = 0; port < 4; port++) {
     const sliceNow = pannelsX[port] * pannelsY;
-    const buff = Buffer.concat([prefix, wtf, bPixels.slice(slice, slice + sliceNow)]);
-    console.log(bPixels.slice(slice, slice + sliceNow));
+    const portBufData = bufLinesForPorts[port];
+    const buff = Buffer.concat([prefix, wtf, portBufData]);
+    console.log(portBufData);
     socket.send(buff, ports[port], UDP_IP, (err) => {
       if (err) console.error(err);
     });
     slice += sliceNow;
   }
+
+  // Добавить потом
+  //socket.close()
 }
 
 const floorMiddleware = () => {
@@ -139,7 +181,10 @@ const floorMiddleware = () => {
   });
 
 
-  socket.bind({address: socketIp, port: socketPort}, () => sendBytes());
+  socket.bind({address: socketIp, port: socketPort}, () => {
+    console.log(`Сокет открыт по адресу:${socketIp} на порту:${socketPort}\n`)
+    sendBytes()
+  });
 }
 
 export default floorMiddleware;
